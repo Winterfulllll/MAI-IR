@@ -1,0 +1,64 @@
+# Конфигурация поискового робота. Единственный аргумент crawler.py и recrawler.py.
+
+db:
+  path: crawler.db            # файл базы SQLite: документы и очередь URL
+
+logic:
+  delay: 1.0                  # задержка между обкачкой страниц одного хоста, с
+  timeout: 30                 # таймаут HTTP-запроса, с
+  user_agent: "MAI-IR-crawler/1.0 (student coursework; contact via MAI)"
+  respect_robots: true        # соблюдать robots.txt
+  max_documents: 0            # предел сохранённых документов за запуск, 0 -- без предела
+  max_depth: 6                # глубина обхода от стартовых URL
+  min_text_length: 1500       # короче -- считаем служебной страницей и не сохраняем
+
+recrawl:
+  batch: 100                  # сколько документов проверять за один запуск
+  min_age_hours: 24           # не трогать документы, проверенные недавно
+
+sources:
+  - name: wikipedia
+    container: "mw-content-ltr mw-parser-output"
+    cut_after:                # хвостовые разделы -- не текст документа
+      - '<h2 id="Примечания"'
+      - '<h2 id="Литература"'
+      - '<h2 id="Ссылки"'
+    follow_only:                # ссылки собираем только со страниц категорий
+      - '/wiki/Категория:'
+    seeds:
+      - https://ru.wikipedia.org/wiki/Категория:Фильмы_по_алфавиту
+      - https://ru.wikipedia.org/wiki/Категория:Телесериалы_по_алфавиту
+      - https://ru.wikipedia.org/wiki/Категория:Актёры_по_алфавиту
+      - https://ru.wikipedia.org/wiki/Категория:Кинорежиссёры_по_алфавиту
+    allow:
+      - '^https://ru\.wikipedia\.org/wiki/'
+    store_deny:                 # обходим ради ссылок, но документами не считаем
+      - '^https://ru\.wikipedia\.org/wiki/(Категория|Список):'
+      - '^https://ru\.wikipedia\.org/wiki/Список_'
+      - '^https://ru\.wikipedia\.org/wiki/Заглавная_страница$'
+    deny:
+      - '^https://ru\.wikipedia\.org/wiki/(Служебная|Обсуждение|Участник|Файл|Шаблон|Портал|Проект|Справка|Википедия|MediaWiki|Инкубатор):'
+      - '^https://ru\.wikipedia\.org/wiki/Обсуждение_'
+      - '\.(jpg|jpeg|png|gif|svg|pdf|ogg|webm)$'
+
+  - name: kino-teatr
+    delay: 5.0                  # сайт закрыт защитой от роботов, нужна пауза длиннее
+    blocked_marker: "Роботам запрещено посещать наш сайт"
+    container: "art article_text"
+    follow_only:                # ссылки собираем только с каталогов и списков
+      - '/kino/art/\w[\w-]*/$'
+      - '/kino/db/'
+      - '/kino/acter/group/'
+    seeds:
+      - https://www.kino-teatr.ru/kino/art/kino/
+      - https://www.kino-teatr.ru/kino/art/serial/
+      - https://www.kino-teatr.ru/kino/db/ros/acter/
+    allow:
+      - '^https://www\.kino-teatr\.ru/kino/(art|acter|movie|db)/'
+    store_allow:                # сохраняем только сами документы, не каталоги
+      - '/kino/art/\w[\w-]*/\d+/$'
+      - '/kino/acter/[mw]/\w+/\d+/bio/$'
+      - '/kino/movie/\w+/\d+/annot/$'
+    deny:
+      - '/(forum|photo|video|comments|stat)/'
+      - '\.(jpg|jpeg|png|gif|svg|pdf)$'

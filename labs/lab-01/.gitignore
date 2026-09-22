@@ -1,0 +1,9 @@
+# Артефакты сборки LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.dvi
+*.ps
+*.bbl
+*.blg

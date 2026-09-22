@@ -1,0 +1,18 @@
+# Артефакты сборки LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.dvi
+*.ps
+*.bbl
+*.blg
+
+# Результаты работы робота
+*.db
+crawl.log
+run.yaml
+
+# Python
+__pycache__/
+*.pyc
