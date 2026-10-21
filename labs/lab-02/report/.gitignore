@@ -1,0 +1,6 @@
+# Артефакты сборки LaTeX
+*.aux
+*.log
+!tests.log
+*.out
+[14 more lines]

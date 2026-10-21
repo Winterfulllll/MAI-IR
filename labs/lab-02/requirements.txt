@@ -1,0 +1,6 @@
+requests>=2.20
+PyYAML>=5.1
+pymongo>=4.0
+
+# только для автотестов: MongoDB в памяти
+mongomock>=4.1

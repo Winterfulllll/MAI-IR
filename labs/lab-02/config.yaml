@@ -1,16 +1,21 @@
 # Конфигурация поискового робота. Единственный аргумент crawler.py и recrawler.py.
 
 db:
-  path: crawler.db            # файл базы SQLite: документы и очередь URL
+  uri: mongodb://localhost:27017   # MongoDB из docker-compose.yml (make db-up)
+  name: crawler                    # база: коллекции documents и frontier
 
 logic:
   delay: 1.0                  # задержка между обкачкой страниц одного хоста, с
   timeout: 30                 # таймаут HTTP-запроса, с
   user_agent: "MAI-IR-crawler/1.0 (student coursework; contact via MAI)"
   respect_robots: true        # соблюдать robots.txt
-  max_documents: 0            # предел сохранённых документов за запуск, 0 -- без предела
-  max_depth: 6                # глубина обхода от стартовых URL
+  max_documents: 35000        # предел сохранённых документов за запуск, 0 -- без предела
+  max_depth: 12               # глубина обхода: дерево категорий о кино -- до 6-7 уровней
   min_text_length: 1500       # короче -- считаем служебной страницей и не сохраняем
+  block_retries: 5            # после стольких капч подряд на одном URL он помечается failed
+  network_retries: 5          # то же для сетевых сбоев: нет связи, таймаут, ответ 5xx/429
+  network_pause: 30           # после сбоя хост на паузе: 30 с, дальше вдвое дольше
+  network_pause_max: 600      # но не больше 10 минут
 
 recrawl:
   batch: 100                  # сколько документов проверять за один запуск
@@ -30,6 +35,11 @@ sources:
       - https://ru.wikipedia.org/wiki/Категория:Телесериалы_по_алфавиту
       - https://ru.wikipedia.org/wiki/Категория:Актёры_по_алфавиту
       - https://ru.wikipedia.org/wiki/Категория:Кинорежиссёры_по_алфавиту
+      - https://ru.wikipedia.org/wiki/Категория:Фильмы_по_годам
+      - https://ru.wikipedia.org/wiki/Категория:Фильмы_по_странам
+      - https://ru.wikipedia.org/wiki/Категория:Фильмы_по_жанрам
+      - https://ru.wikipedia.org/wiki/Категория:Телесериалы_по_странам
+      - https://ru.wikipedia.org/wiki/Категория:Актёры_по_странам
     allow:
       - '^https://ru\.wikipedia\.org/wiki/'
     store_deny:                 # обходим ради ссылок, но документами не считаем
@@ -37,28 +47,38 @@ sources:
       - '^https://ru\.wikipedia\.org/wiki/Список_'
       - '^https://ru\.wikipedia\.org/wiki/Заглавная_страница$'
     deny:
+      # из категорий -- только о кино, иначе робот уходит в книги, картины и т.п.
+      # (каждая категория отдаёт лишь первые 200 статей: продолжение лежит в /w/, а его запрещает robots.txt,
+      #  поэтому корпус набирается из множества мелких категорий -- по годам, странам, жанрам)
+      - '^https://ru\.wikipedia\.org/wiki/Категория:(?!.*([Фф]ильм|[Сс]ериал|[Аа]ктёр|[Аа]ктрис|[Кк]инорежисс))'
+      - '^https://ru\.wikipedia\.org/wiki/Категория:(Википедия|Категории|Шаблоны|Изображения|Файлы)'
       - '^https://ru\.wikipedia\.org/wiki/(Служебная|Обсуждение|Участник|Файл|Шаблон|Портал|Проект|Справка|Википедия|MediaWiki|Инкубатор):'
       - '^https://ru\.wikipedia\.org/wiki/Обсуждение_'
       - '\.(jpg|jpeg|png|gif|svg|pdf|ogg|webm)$'
+      - '^https://ru\.wikipedia\.org/wiki/[^?]*\?'   # любые параметры: правка, красные ссылки, история
 
-  - name: kino-teatr
-    delay: 5.0                  # сайт закрыт защитой от роботов, нужна пауза длиннее
-    blocked_marker: "Роботам запрещено посещать наш сайт"
-    container: "art article_text"
-    follow_only:                # ссылки собираем только с каталогов и списков
-      - '/kino/art/\w[\w-]*/$'
-      - '/kino/db/'
-      - '/kino/acter/group/'
+  - name: filmru
+    delay: 2.0                  # чужой сайт поменьше Википедии -- пауза длиннее
+    container: "wrapper_articles_text"
+    cut_after:                  # подпись автора и кнопки «Поделиться» -- не текст
+      - '<span class="wrapper_articles_info_author"'
+      - '<div class="social_likes"'
+    follow_only:                # ссылки на статьи берём только со страниц-списков
+      - '^https://www\.film\.ru/topic/'
     seeds:
-      - https://www.kino-teatr.ru/kino/art/kino/
-      - https://www.kino-teatr.ru/kino/art/serial/
-      - https://www.kino-teatr.ru/kino/db/ros/acter/
+      - https://www.film.ru/topic/review
+    seed_pages:                 # списки листаются через ajax, ссылок на ?page=N в HTML нет --
+      - url: https://www.film.ru/topic/review?page={n}    # поэтому страницы списков задаём шаблоном
+        first: 0
+        last: 323
+      - url: https://www.film.ru/topic/top10?page={n}
+        first: 0
+        last: 186
+      - url: https://www.film.ru/topic/interview?page={n}
+        first: 0
+        last: 33
     allow:
-      - '^https://www\.kino-teatr\.ru/kino/(art|acter|movie|db)/'
-    store_allow:                # сохраняем только сами документы, не каталоги
-      - '/kino/art/\w[\w-]*/\d+/$'
-      - '/kino/acter/[mw]/\w+/\d+/bio/$'
-      - '/kino/movie/\w+/\d+/annot/$'
-    deny:
-      - '/(forum|photo|video|comments|stat)/'
-      - '\.(jpg|jpeg|png|gif|svg|pdf)$'
+      - '^https://www\.film\.ru/topic/(review|top10|interview)(\?page=\d+)?$'
+      - '^https://www\.film\.ru/articles/[a-z0-9-]+$'
+    store_allow:                # документы -- только статьи: рецензии, подборки, интервью
+      - '^https://www\.film\.ru/articles/'
